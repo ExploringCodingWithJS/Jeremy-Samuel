@@ -67,14 +67,17 @@ The Medical Diagnosis AI System processes patient symptoms through a sophisticat
 ## 3. Tool Integration
 
 ### **Google ADK (Gemini) Integration**
-- **Primary Tool**: Google Generative AI (Gemini Pro)
+- **Primary Tool**: Google Generative AI (Gemini 1.5 Flash - Free Tier)
 - **Integration Method**: Direct API calls via `google.generativeai`
+- **Multimodal Support**: Text, images, and document analysis
 - **Usage Pattern**:
   ```python
   genai.configure(api_key=settings.GOOGLE_API_KEY)
-  model = genai.GenerativeModel(model_name="gemini-pro")
+  model = genai.GenerativeModel(model_name="gemini-1.5-flash")
   response = await asyncio.to_thread(model.generate_content, prompt)
   ```
+- **Retry Logic**: Exponential backoff with jitter for reliability
+- **Mock Mode**: Fallback responses when API quota is exceeded
 
 ### **Prompt Engineering**
 - **Structured Prompts**: Each agent has specialized system prompts
@@ -86,14 +89,18 @@ The Medical Diagnosis AI System processes patient symptoms through a sophisticat
 - **Async/Await**: Non-blocking agent analysis
 - **asyncio.gather()**: Parallel specialist consultations
 - **Error Handling**: Graceful degradation if agents fail
+- **Multimodal Processing**: Concurrent image and document analysis
+- **File Upload Support**: Multipart form data handling
 
 ## 4. Observability & Testing
 
 ### **Comprehensive Logging**
 - **Location**: `./logs/medical_ai.log`
-- **Levels**: INFO, ERROR, DEBUG
-- **Content**: Agent responses, API calls, error traces
-- **Format**: Structured JSON with timestamps
+- **Levels**: INFO, ERROR, DEBUG, WARNING
+- **Content**: Agent responses, API calls, error traces, retry attempts
+- **Format**: Structured format with timestamps and module names
+- **Multimodal Indicators**: File processing, image analysis, document extraction
+- **Quota Monitoring**: API limit tracking and fallback handling
 
 ### **Health Monitoring**
 - **Endpoint**: `/health` - System status and agent count
@@ -134,10 +141,12 @@ curl -X POST http://localhost:8000/diagnose \
 - **Emergency Handling**: Cannot replace emergency medical services
 
 ### **Performance Considerations**
-- **API Rate Limits**: Google Gemini API usage limits
+- **API Rate Limits**: Google Gemini API usage limits (15 requests/minute free tier)
 - **Response Times**: Concurrent processing but still dependent on AI model speed
 - **Scalability**: In-memory session storage limits concurrent users
-- **Error Recovery**: Limited retry mechanisms for failed API calls
+- **Error Recovery**: Robust retry mechanisms with exponential backoff
+- **Multimodal Processing**: Additional time for image/document analysis
+- **Mock Mode**: Instant responses when API quota is exceeded
 
 ### **Medical Limitations**
 - **Not Medical Advice**: Educational and informational purposes only

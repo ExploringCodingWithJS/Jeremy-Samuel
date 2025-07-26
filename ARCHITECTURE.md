@@ -88,25 +88,29 @@
 ### 5. Google ADK Integration
 - **Purpose**: AI model access and processing
 - **Features**:
-  - Gemini Pro model integration
+  - Gemini 1.5 Flash model integration (free tier)
+  - Multimodal analysis (text + images + documents)
   - Structured prompt engineering
   - Response parsing and validation
   - Error handling and fallbacks
+  - Retry logic with exponential backoff
+  - Mock mode for testing without API calls
 
 ## Data Flow
 
 ```
-1. Patient Input → Streamlit Frontend
-2. Frontend → FastAPI Backend (HTTP Request)
-3. Backend → Coordinator (Internal Call)
-4. Coordinator → Symptom Analysis (Routing Logic)
-5. Coordinator → Relevant Agents (Concurrent Calls)
-6. Agents → Google ADK (AI Analysis)
-7. Google ADK → Agents (Structured Response)
-8. Agents → Coordinator (Enhanced Analysis)
-9. Coordinator → Backend (Synthesized Results)
-10. Backend → Frontend (HTTP Response)
-11. Frontend → Patient (Display Results)
+1. Patient Input → Streamlit Frontend (text + files)
+2. Frontend → FastAPI Backend (multipart/form-data)
+3. Backend → File Processing (image/document extraction)
+4. Backend → Coordinator (Internal Call)
+5. Coordinator → Symptom Analysis (Routing Logic)
+6. Coordinator → Relevant Agents (Concurrent Calls)
+7. Agents → Google ADK (Multimodal AI Analysis)
+8. Google ADK → Agents (Structured Response)
+9. Agents → Coordinator (Enhanced Analysis)
+10. Coordinator → Backend (Synthesized Results)
+11. Backend → Frontend (HTTP Response)
+12. Frontend → Patient (Display Results)
 ```
 
 ## Key Design Principles
@@ -140,12 +144,14 @@
 
 | Component | Technology | Purpose |
 |-----------|------------|---------|
-| Frontend | Streamlit | Web interface |
-| Backend | FastAPI | API server |
-| AI | Google Gemini | Medical analysis |
+| Frontend | Streamlit | Web interface with file upload |
+| Backend | FastAPI | API server with multipart support |
+| AI | Google Gemini 1.5 Flash | Multimodal medical analysis |
 | Language | Python 3.8+ | Core development |
 | Data | Pydantic | Validation |
 | Logging | Python logging | Monitoring |
+| File Processing | PyPDF2, python-docx | Document text extraction |
+| Retry Logic | Custom utils | Exponential backoff |
 
 ## Configuration Management
 
@@ -156,9 +162,11 @@
 
 ## Monitoring & Observability
 
-- Comprehensive logging
-- Health check endpoints
-- Session tracking
-- Performance metrics
-- Error reporting
+- Comprehensive logging with structured format
+- Health check endpoints (`/health`, `/agents`, `/specialties`)
+- Session tracking with full consultation history
+- Performance metrics and response times
+- Error reporting with retry mechanisms
+- Multimodal processing indicators
+- API quota monitoring and fallback handling
 
