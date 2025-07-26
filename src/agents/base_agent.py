@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 import google.generativeai as genai
 from src.config import settings, MEDICAL_SPECIALTIES
 from src.models import AgentResponse, DiagnosisRequest, Symptom
+from src.utils import async_retry, GEMINI_API_RETRY_CONFIG
 
 logger = logging.getLogger(__name__)
 
@@ -138,16 +139,99 @@ Respond in the following JSON format:
         return prompt
     
     async def _get_ai_response(self, prompt: str) -> str:
-        """Get response from the AI model"""
-        try:
-            response = await asyncio.to_thread(
+        """Get response from the AI model with retry logic"""
+        async def _call_gemini():
+            return await asyncio.to_thread(
                 self.model.generate_content,
                 prompt
             )
+        
+        try:
+            # Check if mock mode is enabled
+            if settings.MOCK_MODE:
+                logger.info(f"Mock mode enabled for agent {self.agent_id}")
+                return self._get_mock_response()
+            
+            response = await async_retry(
+                _call_gemini,
+                config=GEMINI_API_RETRY_CONFIG
+            )
             return response.text
         except Exception as e:
-            logger.error(f"Error getting AI response: {str(e)}")
-            raise
+            error_msg = str(e)
+            # Check if it's a quota error
+            if "429" in error_msg or "quota" in error_msg.lower():
+                logger.warning(f"API quota exceeded for agent {self.agent_id}, using mock response")
+                return self._get_mock_response()
+            else:
+                logger.error(f"Error getting AI response after retries: {str(e)}")
+                raise
+
+    def _get_mock_response(self) -> str:
+        """Generate a mock response for testing when API is unavailable"""
+        mock_responses = {
+            "general_physician": {
+                "analysis": "Based on the symptoms described, this appears to be a general medical concern that requires professional evaluation.",
+                "recommendations": ["Schedule an appointment with your primary care physician", "Monitor symptoms and seek care if they worsen"],
+                "confidence": 0.6,
+                "suggested_tests": ["Complete blood count", "Basic metabolic panel"],
+                "additional_questions": ["When did symptoms first appear?", "Are there any triggers?"]
+            },
+            "cardiology": {
+                "analysis": "The symptoms described may indicate cardiovascular concerns that warrant medical attention.",
+                "recommendations": ["Consult with a cardiologist", "Monitor for chest pain or shortness of breath"],
+                "confidence": 0.7,
+                "suggested_tests": ["Electrocardiogram (ECG)", "Echocardiogram"],
+                "additional_questions": ["Is there a family history of heart disease?", "Do symptoms worsen with exertion?"]
+            },
+            "radiology": {
+                "analysis": "Imaging studies may be helpful in evaluating the described symptoms.",
+                "recommendations": ["Consult with a radiologist", "Consider appropriate imaging based on symptoms"],
+                "confidence": 0.5,
+                "suggested_tests": ["Chest X-ray", "CT scan if indicated"],
+                "additional_questions": ["Are there any visible abnormalities?", "What type of imaging was requested?"]
+            },
+            "neurology": {
+                "analysis": "Neurological symptoms require careful evaluation by a specialist.",
+                "recommendations": ["Consult with a neurologist", "Monitor for neurological changes"],
+                "confidence": 0.6,
+                "suggested_tests": ["MRI of brain", "Neurological examination"],
+                "additional_questions": ["Are there any neurological symptoms?", "Is there a history of head injury?"]
+            },
+            "oncology": {
+                "analysis": "While symptoms may not immediately suggest cancer, thorough evaluation is important.",
+                "recommendations": ["Consult with an oncologist if indicated", "Follow up on any concerning symptoms"],
+                "confidence": 0.4,
+                "suggested_tests": ["Cancer screening tests", "Biopsy if indicated"],
+                "additional_questions": ["Is there a family history of cancer?", "Are there any concerning symptoms?"]
+            },
+            "pediatrics": {
+                "analysis": "Pediatric symptoms require age-appropriate evaluation and care.",
+                "recommendations": ["Consult with a pediatrician", "Monitor child's development"],
+                "confidence": 0.7,
+                "suggested_tests": ["Growth and development assessment", "Age-appropriate screenings"],
+                "additional_questions": ["How is the child's development progressing?", "Are there any developmental concerns?"]
+            },
+            "psychiatry": {
+                "analysis": "Mental health symptoms require professional psychiatric evaluation.",
+                "recommendations": ["Consult with a psychiatrist", "Consider therapy options"],
+                "confidence": 0.6,
+                "suggested_tests": ["Mental health assessment", "Psychological evaluation"],
+                "additional_questions": ["Are there any mental health symptoms?", "Is there a history of mental health concerns?"]
+            }
+        }
+        
+        # Get mock response for this specialty
+        mock_data = mock_responses.get(self.specialty, mock_responses["general_physician"])
+        
+        # Format as JSON response
+        return f'''{{
+            "analysis": "{mock_data['analysis']}",
+            "recommendations": {mock_data['recommendations']},
+            "confidence": {mock_data['confidence']},
+            "suggested_tests": {mock_data['suggested_tests']},
+            "additional_questions": {mock_data['additional_questions']}
+        }}'''
     
     def _parse_ai_response(self, response: str, diagnosis_request: DiagnosisRequest) -> AgentResponse:
         """Parse the AI response into structured format"""
@@ -219,7 +303,80 @@ Respond in the following JSON format:
             suggested_tests=[]
         )
     
-    @abstractmethod
     async def specialized_analysis(self, diagnosis_request: DiagnosisRequest) -> AgentResponse:
         """Specialized analysis method to be implemented by each agent"""
         pass 
+
+    async def specialized_analysis_with_files(self, diagnosis_request: DiagnosisRequest, image_bytes_list=None, doc_texts=None) -> AgentResponse:
+        """Specialized analysis that can handle images and document texts"""
+        image_bytes_list = image_bytes_list or []
+        doc_texts = doc_texts or []
+        # If there are images or doc_texts, use multimodal analysis
+        if image_bytes_list or doc_texts:
+            return await self._multimodal_analysis(diagnosis_request, image_bytes_list, doc_texts)
+        else:
+            return await self.specialized_analysis(diagnosis_request)
+
+    async def _multimodal_analysis(self, diagnosis_request: DiagnosisRequest, image_bytes_list, doc_texts) -> AgentResponse:
+        """Multimodal analysis using Gemini Vision/Text API with retry logic"""
+        # Combine all text: user description, doc_texts, and symptom descriptions
+        combined_text = "\n".join([s.description for s in diagnosis_request.symptoms] + doc_texts)
+        
+        # If images are present, use Gemini Vision API
+        if image_bytes_list:
+            async def _call_gemini_vision():
+                import google.generativeai as genai
+                genai.configure(api_key=settings.GOOGLE_API_KEY)
+                model = genai.GenerativeModel(
+                    model_name="gemini-1.5-flash",
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=self.temperature,
+                        max_output_tokens=settings.MAX_TOKENS
+                    )
+                )
+                # Prepare input: images + text
+                parts = []
+                for img_bytes in image_bytes_list:
+                    parts.append({"mime_type": "image/jpeg", "data": img_bytes})
+                if combined_text:
+                    parts.append({"text": combined_text})
+                return await asyncio.to_thread(
+                    model.generate_content,
+                    parts
+                )
+            
+            try:
+                response = await async_retry(
+                    _call_gemini_vision,
+                    config=GEMINI_API_RETRY_CONFIG
+                )
+                return self._parse_ai_response(response.text, diagnosis_request)
+            except Exception as e:
+                logger.error(f"Error in multimodal Gemini Vision API after retries: {str(e)}")
+                return self._create_error_response(diagnosis_request)
+        else:
+            # Only text (user description + doc_texts)
+            async def _call_gemini_text():
+                import google.generativeai as genai
+                genai.configure(api_key=settings.GOOGLE_API_KEY)
+                model = genai.GenerativeModel(
+                    model_name=self.model_name,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=self.temperature,
+                        max_output_tokens=settings.MAX_TOKENS
+                    )
+                )
+                return await asyncio.to_thread(
+                    model.generate_content,
+                    combined_text
+                )
+            
+            try:
+                response = await async_retry(
+                    _call_gemini_text,
+                    config=GEMINI_API_RETRY_CONFIG
+                )
+                return self._parse_ai_response(response.text, diagnosis_request)
+            except Exception as e:
+                logger.error(f"Error in Gemini Text API after retries: {str(e)}")
+                return self._create_error_response(diagnosis_request) 

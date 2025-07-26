@@ -3,11 +3,15 @@ FastAPI application for Medical Diagnosis AI System
 """
 
 import logging
-from typing import List, Dict, Any
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from typing import List, Dict, Any, Optional
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import uvicorn
+import tempfile
+import os
+import io
 
 from src.coordinator import MedicalDiagnosisCoordinator
 from src.models import (
@@ -108,51 +112,81 @@ async def get_specialties():
     }
 
 @app.post("/diagnose", response_model=DiagnosisResponse)
-async def diagnose_symptoms(request: DiagnosisRequestAPI):
-    """Main diagnosis endpoint"""
+async def diagnose_symptoms(
+    request: Request,
+    # For multipart/form-data
+    json: Optional[str] = Form(None),
+    files: Optional[list[UploadFile]] = File(None)
+):
+    """Main diagnosis endpoint supporting file uploads"""
     try:
-        # Convert API request to internal model
-        patient_info = PatientInfo(
-            patient_id=request.patient_info.patient_id,
-            age=request.patient_info.age,
-            gender=request.patient_info.gender,
-            weight=request.patient_info.weight,
-            height=request.patient_info.height,
-            medical_history=request.patient_info.medical_history,
-            allergies=request.patient_info.allergies,
-            medications=request.patient_info.medications,
-            family_history=request.patient_info.family_history
-        )
-        
-        symptoms = []
-        for symptom_req in request.symptoms:
-            symptom = Symptom(
-                name=symptom_req.name,
-                description=symptom_req.description,
-                severity=SeverityLevel(symptom_req.severity),
-                duration=symptom_req.duration,
-                onset=symptom_req.onset,
-                triggers=symptom_req.triggers,
-                alleviating_factors=symptom_req.alleviating_factors
-            )
-            symptoms.append(symptom)
-        
+        # If multipart/form-data, parse JSON and files
+        if json is not None:
+            import json as pyjson
+            data = pyjson.loads(json)
+        else:
+            data = await request.json()
+        # Parse patient info and symptoms as before
+        patient_info = PatientInfo(**data["patient_info"])
+        symptoms = [Symptom(**s) for s in data["symptoms"]]
+        additional_notes = data.get("additional_notes", "")
+        # Handle files (images/docs)
+        uploaded_images = []
+        uploaded_docs = []
+        if files:
+            for f in files:
+                if f.content_type.startswith("image/"):
+                    uploaded_images.append(f)
+                elif f.content_type in ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]:
+                    uploaded_docs.append(f)
+        # Extract text from documents
+        doc_texts = []
+        for doc in uploaded_docs:
+            content = await doc.read()
+            if doc.content_type == "application/pdf":
+                try:
+                    import PyPDF2
+                    reader = PyPDF2.PdfReader(io.BytesIO(content))
+                    text = " ".join(page.extract_text() or "" for page in reader.pages)
+                    doc_texts.append(text)
+                except Exception:
+                    doc_texts.append("[Could not extract text from PDF]")
+            elif doc.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+                try:
+                    import docx
+                    docx_file = docx.Document(io.BytesIO(content))
+                    text = " ".join([p.text for p in docx_file.paragraphs])
+                    doc_texts.append(text)
+                except Exception:
+                    doc_texts.append("[Could not extract text from DOCX]")
+            elif doc.content_type == "text/plain":
+                try:
+                    text = content.decode("utf-8", errors="ignore")
+                    doc_texts.append(text)
+                except Exception:
+                    doc_texts.append("[Could not extract text from TXT]")
+        # Pass everything to the coordinator
         diagnosis_request = DiagnosisRequest(
             patient_info=patient_info,
             symptoms=symptoms,
-            additional_notes=request.additional_notes
+            additional_notes=additional_notes
         )
-        
-        # Get diagnosis from coordinator
-        diagnosis_result = await coordinator.diagnose_symptoms(diagnosis_request)
-        
+        # Read image bytes
+        image_bytes_list = []
+        for img in uploaded_images:
+            image_bytes_list.append(await img.read())
+        # Call coordinator with extra files/texts
+        diagnosis_result = await coordinator.diagnose_symptoms(
+            diagnosis_request,
+            image_bytes_list=image_bytes_list,
+            doc_texts=doc_texts
+        )
         # Get session ID (assuming it's the latest session for this patient)
         session_id = None
         for session in coordinator.get_all_sessions():
             if session.patient_id == patient_info.patient_id:
                 session_id = session.session_id
                 break
-        
         # Create response message based on urgency
         if diagnosis_result.urgency_level == UrgencyLevel.EMERGENCY:
             message = "URGENT: Please seek immediate medical attention. This may be a medical emergency."
@@ -160,14 +194,14 @@ async def diagnose_symptoms(request: DiagnosisRequestAPI):
             message = "URGENT: Please seek medical attention within 24 hours."
         else:
             message = "Please consult with your healthcare provider for proper evaluation and treatment."
-        
         return DiagnosisResponse(
             session_id=session_id or "unknown",
             diagnosis=diagnosis_result,
             message=message
         )
-        
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         logger.error(f"Error in diagnosis endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Diagnosis failed: {str(e)}")
 

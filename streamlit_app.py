@@ -17,7 +17,7 @@ def main():
         page_title="Medical Diagnosis AI System",
         page_icon="🏥",
         layout="wide",
-        initial_sidebar_state="expanded"
+        initial_sidebar_state="collapsed"
     )
     
     st.title("🏥 Medical Diagnosis AI System")
@@ -97,45 +97,55 @@ def diagnosis_page():
         family_history = st.text_area("Family History (comma-separated)", 
                                     placeholder="e.g., heart disease, cancer")
     
-    # Symptoms
-    st.subheader("Symptoms")
-    
-    # Dynamic symptom input
-    symptoms = []
-    num_symptoms = st.number_input("Number of symptoms", min_value=1, max_value=10, value=1)
-    
-    for i in range(num_symptoms):
-        with st.expander(f"Symptom {i+1}", expanded=True):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                name = st.text_input(f"Symptom name {i+1}", 
-                                   placeholder="e.g., chest pain, headache")
-                description = st.text_area(f"Description {i+1}", 
-                                         placeholder="Describe the symptom in detail")
-                severity = st.selectbox(f"Severity {i+1}", 
-                                      ["mild", "moderate", "severe", "critical"])
-            
-            with col2:
-                duration = st.text_input(f"Duration {i+1}", 
-                                       placeholder="e.g., 2 days, 1 week")
-                onset = st.text_input(f"Onset {i+1}", 
-                                    placeholder="e.g., sudden, gradual")
-                triggers = st.text_input(f"Triggers {i+1}", 
-                                       placeholder="e.g., exercise, stress")
-                alleviating_factors = st.text_input(f"Alleviating factors {i+1}", 
-                                                  placeholder="e.g., rest, medication")
-            
-            if name and description:
-                symptoms.append({
-                    "name": name,
-                    "description": description,
-                    "severity": severity,
-                    "duration": duration,
-                    "onset": onset,
-                    "triggers": [t.strip() for t in triggers.split(",") if t.strip()],
-                    "alleviating_factors": [a.strip() for a in alleviating_factors.split(",") if a.strip()]
-                })
+    # Intuitive Symptom Input
+    st.subheader("Describe What You're Feeling")
+    user_symptom_text = st.text_area(
+        "Describe your symptoms or what you are feeling in your own words:",
+        placeholder="e.g., I have a headache and feel dizzy with chest pain."
+    )
+
+    # File Upload
+    st.subheader("Upload Files (optional)")
+    uploaded_files = st.file_uploader(
+        "Upload images and documents (e.g., scans, photos, reports, PDFs)",
+        type=["png", "jpg", "jpeg", "pdf", "docx", "txt"],
+        accept_multiple_files=True,
+        help="Supported formats: Images (PNG, JPG, JPEG), Documents (PDF, DOCX, TXT)"
+    )
+
+    # Advanced/Structured Input (optional, hidden by default)
+    with st.expander("Advanced: Add Structured Symptoms (optional)"):
+        symptoms = []
+        num_symptoms = st.number_input("Number of symptoms", min_value=0, max_value=10, value=0, key="adv_num_symptoms")
+        for i in range(num_symptoms):
+            with st.expander(f"Symptom {i+1}", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    name = st.text_input(f"Symptom name {i+1}", 
+                                       placeholder="e.g., chest pain, headache", key=f"adv_name_{i}")
+                    description = st.text_area(f"Description {i+1}", 
+                                             placeholder="Describe the symptom in detail", key=f"adv_desc_{i}")
+                    severity = st.selectbox(f"Severity {i+1}", 
+                                          ["mild", "moderate", "severe", "critical"], key=f"adv_sev_{i}")
+                with col2:
+                    duration = st.text_input(f"Duration {i+1}", 
+                                           placeholder="e.g., 2 days, 1 week", key=f"adv_dur_{i}")
+                    onset = st.text_input(f"Onset {i+1}", 
+                                        placeholder="e.g., sudden, gradual", key=f"adv_onset_{i}")
+                    triggers = st.text_input(f"Triggers {i+1}", 
+                                           placeholder="e.g., exercise, stress", key=f"adv_trig_{i}")
+                    alleviating_factors = st.text_input(f"Alleviating factors {i+1}", 
+                                                      placeholder="e.g., rest, medication", key=f"adv_allev_{i}")
+                if name and description:
+                    symptoms.append({
+                        "name": name,
+                        "description": description,
+                        "severity": severity,
+                        "duration": duration,
+                        "onset": onset,
+                        "triggers": [t.strip() for t in triggers.split(",") if t.strip()],
+                        "alleviating_factors": [a.strip() for a in alleviating_factors.split(",") if a.strip()]
+                    })
     
     # Additional Notes
     additional_notes = st.text_area("Additional Notes", 
@@ -143,25 +153,46 @@ def diagnosis_page():
     
     # Diagnosis Button
     if st.button("🔍 Get Diagnosis", type="primary", use_container_width=True):
-        if symptoms:
-            with st.spinner("Analyzing symptoms with multiple specialists..."):
+        if user_symptom_text.strip() or symptoms or uploaded_files:
+            with st.spinner("Analyzing symptoms and files with multiple specialists..."):
+                # If user provided free-text, use it as a single symptom
+                if user_symptom_text.strip():
+                    symptoms_to_send = [{
+                        "name": "User Description",
+                        "description": user_symptom_text.strip(),
+                        "severity": "moderate",
+                        "duration": "unspecified",
+                        "onset": "unspecified",
+                        "triggers": [],
+                        "alleviating_factors": []
+                    }]
+                else:
+                    symptoms_to_send = symptoms
+                
+                # Separate images and documents from uploaded files
+                uploaded_images = []
+                uploaded_docs = []
+                if uploaded_files:
+                    for file in uploaded_files:
+                        if file.type.startswith("image/"):
+                            uploaded_images.append(file)
+                        elif file.type in ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]:
+                            uploaded_docs.append(file)
+                
                 result = get_diagnosis(
                     patient_id, age, gender, weight, height,
                     medical_history, allergies, medications, family_history,
-                    symptoms, additional_notes
+                    symptoms_to_send, additional_notes,
+                    uploaded_images, uploaded_docs
                 )
-                
                 if result:
                     display_diagnosis_result(result)
         else:
-            st.warning("Please add at least one symptom.")
+            st.warning("Please describe what you are feeling, add at least one symptom, or upload a file.")
 
 def display_diagnosis_result(result: Dict[str, Any]):
     """Display diagnosis results"""
     st.success("✅ Diagnosis completed!")
-    
-    # Session info
-    st.info(f"Session ID: {result['session_id']}")
     
     # Urgency level
     urgency = result['diagnosis']['urgency_level']
@@ -176,21 +207,11 @@ def display_diagnosis_result(result: Dict[str, Any]):
     st.markdown(f"**Message**: {result['message']}")
     
     # Results in tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋 Summary", "👨‍⚕️ Specialists", "🔬 Tests", "⚡ Actions", "📝 Follow-up"
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "👨‍⚕️ Specialists", "🔬 Tests", "⚡ Actions", "📝 Follow-up"
     ])
     
     with tab1:
-        st.subheader("Diagnosis Summary")
-        st.markdown(f"**Confidence Score**: {result['diagnosis']['confidence_score']:.2%}")
-        st.markdown(f"**Urgency Level**: {urgency.title()}")
-        
-        if result['diagnosis']['possible_conditions']:
-            st.markdown("**Possible Conditions**:")
-            for condition in result['diagnosis']['possible_conditions']:
-                st.markdown(f"- {condition}")
-    
-    with tab2:
         st.subheader("Recommended Specialists")
         specialists = result['diagnosis']['recommended_specialists']
         if specialists:
@@ -199,7 +220,7 @@ def display_diagnosis_result(result: Dict[str, Any]):
         else:
             st.info("No specific specialists recommended")
     
-    with tab3:
+    with tab2:
         st.subheader("Suggested Tests")
         tests = result['diagnosis']['suggested_tests']
         if tests:
@@ -208,7 +229,7 @@ def display_diagnosis_result(result: Dict[str, Any]):
         else:
             st.info("No specific tests recommended")
     
-    with tab4:
+    with tab3:
         st.subheader("Immediate Actions")
         actions = result['diagnosis']['immediate_actions']
         if actions:
@@ -217,7 +238,7 @@ def display_diagnosis_result(result: Dict[str, Any]):
         else:
             st.info("No immediate actions required")
     
-    with tab5:
+    with tab4:
         st.subheader("Follow-up Plan")
         st.markdown(result['diagnosis']['follow_up_plan'])
         
@@ -370,8 +391,9 @@ def check_api_health() -> bool:
 
 def get_diagnosis(patient_id: str, age: int, gender: str, weight: float, height: float,
                  medical_history: str, allergies: str, medications: str, family_history: str,
-                 symptoms: List[Dict], additional_notes: str) -> Dict[str, Any]:
-    """Send diagnosis request to API"""
+                 symptoms: List[Dict], additional_notes: str,
+                 uploaded_images=None, uploaded_docs=None) -> Dict[str, Any]:
+    """Send diagnosis request to API, including files if present"""
     try:
         # Prepare request data
         request_data = {
@@ -389,20 +411,35 @@ def get_diagnosis(patient_id: str, age: int, gender: str, weight: float, height:
             "symptoms": symptoms,
             "additional_notes": additional_notes
         }
-        
-        # Send request
-        response = requests.post(
-            f"{API_BASE_URL}/diagnose",
-            json=request_data,
-            timeout=60
-        )
-        
+        files = {}
+        # Attach images
+        if uploaded_images:
+            for idx, img in enumerate(uploaded_images):
+                files[f"image_{idx}"] = (img.name, img, img.type)
+        # Attach documents
+        if uploaded_docs:
+            for idx, doc in enumerate(uploaded_docs):
+                files[f"document_{idx}"] = (doc.name, doc, doc.type)
+        if files:
+            # Send as multipart/form-data
+            response = requests.post(
+                f"{API_BASE_URL}/diagnose",
+                data={"json": json.dumps(request_data)},
+                files=files,
+                timeout=120
+            )
+        else:
+            # Send as JSON
+            response = requests.post(
+                f"{API_BASE_URL}/diagnose",
+                json=request_data,
+                timeout=120
+            )
         if response.status_code == 200:
             return response.json()
         else:
             st.error(f"API Error: {response.status_code} - {response.text}")
             return None
-            
     except Exception as e:
         st.error(f"Error sending diagnosis request: {str(e)}")
         return None

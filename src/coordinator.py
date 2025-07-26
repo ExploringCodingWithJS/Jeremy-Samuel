@@ -42,8 +42,10 @@ class MedicalDiagnosisCoordinator:
         }
         logger.info(f"Initialized {len(self.agents)} medical specialist agents")
     
-    async def diagnose_symptoms(self, diagnosis_request: DiagnosisRequest) -> DiagnosisResult:
-        """Main method to coordinate diagnosis across multiple specialists"""
+    async def diagnose_symptoms(self, diagnosis_request: DiagnosisRequest, image_bytes_list=None, doc_texts=None) -> DiagnosisResult:
+        """Main method to coordinate diagnosis across multiple specialists, with support for images/docs"""
+        image_bytes_list = image_bytes_list or []
+        doc_texts = doc_texts or []
         try:
             # Create consultation session
             session_id = str(uuid.uuid4())
@@ -62,7 +64,7 @@ class MedicalDiagnosisCoordinator:
             
             # Get analyses from relevant specialists
             agent_responses = await self._get_specialist_analyses(
-                diagnosis_request, relevant_specialists
+                diagnosis_request, relevant_specialists, image_bytes_list, doc_texts
             )
             
             # Update session with agent responses
@@ -118,20 +120,23 @@ class MedicalDiagnosisCoordinator:
     async def _get_specialist_analyses(
         self, 
         diagnosis_request: DiagnosisRequest, 
-        specialists: List[str]
+        specialists: List[str],
+        image_bytes_list=None,
+        doc_texts=None
     ) -> List[AgentResponse]:
-        """Get analyses from all relevant specialists"""
+        """Get analyses from all relevant specialists, passing images/docs"""
         tasks = []
-        
+        image_bytes_list = image_bytes_list or []
+        doc_texts = doc_texts or []
         for specialty in specialists:
             if specialty in self.agents:
                 agent = self.agents[specialty]
-                task = agent.specialized_analysis(diagnosis_request)
+                task = agent.specialized_analysis_with_files(
+                    diagnosis_request, image_bytes_list, doc_texts
+                )
                 tasks.append(task)
-        
         # Execute all analyses concurrently
         responses = await asyncio.gather(*tasks, return_exceptions=True)
-        
         # Filter out exceptions and return valid responses
         valid_responses = []
         for response in responses:
@@ -139,7 +144,6 @@ class MedicalDiagnosisCoordinator:
                 logger.error(f"Agent analysis failed: {str(response)}")
             else:
                 valid_responses.append(response)
-        
         return valid_responses
     
     async def _synthesize_diagnosis(

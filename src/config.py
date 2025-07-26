@@ -14,9 +14,12 @@ class Settings(BaseSettings):
     # Removed GOOGLE_PROJECT_ID and GOOGLE_LOCATION
     
     # Model Configuration
-    PRIMARY_MODEL: str = "gemini-pro"
+    PRIMARY_MODEL: str = "gemini-1.5-flash"  # Free, fast model
     TEMPERATURE: float = 0.3
     MAX_TOKENS: int = 4000
+    
+    # Development/Testing
+    MOCK_MODE: bool = False  # Set to True to use mock responses when API quota is exceeded
     
     # Removed DATABASE_URL
     
@@ -47,49 +50,49 @@ MEDICAL_SPECIALTIES = {
         "name": "General Physician",
         "description": "Primary care and general medical diagnosis",
         "expertise": ["general medicine", "primary care", "preventive medicine"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     },
     "cardiology": {
         "name": "Cardiologist",
         "description": "Heart and cardiovascular system specialist",
         "expertise": ["cardiology", "heart disease", "cardiovascular health"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     },
     "radiology": {
         "name": "Radiologist",
         "description": "Medical imaging and diagnostic radiology",
         "expertise": ["radiology", "medical imaging", "diagnostic imaging"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     },
     "neurology": {
         "name": "Neurologist",
         "description": "Nervous system and brain specialist",
         "expertise": ["neurology", "brain disorders", "nervous system"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     },
     "oncology": {
         "name": "Oncologist",
         "description": "Cancer diagnosis and treatment specialist",
         "expertise": ["oncology", "cancer", "tumor diagnosis"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     },
     "pediatrics": {
         "name": "Pediatrician",
         "description": "Children's health and development specialist",
         "expertise": ["pediatrics", "child health", "developmental medicine"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     },
     "psychiatry": {
         "name": "Psychiatrist",
         "description": "Mental health and behavioral disorders specialist",
         "expertise": ["psychiatry", "mental health", "behavioral disorders"],
-        "model": "gemini-pro",
+        "model": "gemini-1.5-flash",
         "temperature": 0.2
     }
 }

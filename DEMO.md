@@ -41,9 +41,9 @@ The Medical Diagnosis AI System is a multi-agent AI platform that provides compr
    streamlit run streamlit_app.py
    ```
 
-## 🎬 Demo Scenarios
+## 🎬 Demo Scenario
 
-### Scenario 1: Cardiac Symptoms (Emergency Detection)
+### Cardiac Symptoms with Emergency Detection
 **Patient**: 55-year-old male with chest pain
 **Symptoms**: 
 - Sharp chest pain (moderate severity, 2 hours duration)
@@ -55,33 +55,7 @@ The Medical Diagnosis AI System is a multi-agent AI platform that provides compr
 - System recommends immediate medical attention
 - General physician provides comprehensive assessment
 - Radiology agent suggests imaging studies
-
-### Scenario 2: Pediatric Case (Age-Appropriate Care)
-**Patient**: 8-year-old child with behavioral issues
-**Symptoms**:
-- Difficulty concentrating in school
-- Behavioral problems at home
-- Sleep disturbances
-
-**Expected Behavior**:
-- Pediatrics agent automatically included
-- Psychiatry agent provides mental health assessment
-- Age-appropriate recommendations
-- Developmental milestone considerations
-
-### Scenario 3: Complex Multi-System Symptoms
-**Patient**: 40-year-old female with multiple symptoms
-**Symptoms**:
-- Headache (neurological)
-- Anxiety (psychiatric)
-- Fatigue (general)
-- Weight loss (general/oncology)
-
-**Expected Behavior**:
-- Multiple specialists consulted
-- Coordinated analysis from all relevant agents
-- Prioritized recommendations
-- Comprehensive follow-up plan
+- Multi-agent coordination demonstrates system capabilities
 
 ## 🎭 Demo Flow
 
@@ -123,28 +97,19 @@ The Medical Diagnosis AI System is a multi-agent AI platform that provides compr
   - Medical Agents (7 specialists)
   - Google ADK integration
 
-## 🎪 Key Demo Features to Highlight
+## 🎪 Key Demo Features
 
-### 1. Multi-Agent Coordination
-- **Concurrent Processing**: Multiple specialists analyze simultaneously
+### Multi-Agent AI Coordination
+- **Concurrent Analysis**: Multiple medical specialists analyze simultaneously
 - **Intelligent Routing**: Symptoms automatically routed to relevant specialists
-- **Result Synthesis**: Coordinated analysis from all agents
+- **Emergency Detection**: Real-time flagging of urgent conditions
+- **Coordinated Results**: Synthesized analysis from all agents
 
-### 2. Emergency Detection
-- **Real-time Flagging**: Urgent conditions identified immediately
-- **Priority Handling**: Emergency recommendations prioritized
-- **Safety Protocols**: Clear emergency guidance
-
-### 3. Empathetic Communication
-- **Patient-Friendly Language**: Clear, understandable explanations
-- **Comprehensive Results**: Detailed analysis and recommendations
-- **Follow-up Planning**: Structured next steps
-
-### 4. Technical Excellence
-- **Modern Architecture**: FastAPI + Streamlit + Google ADK
-- **Scalable Design**: Easy to add new specialists
-- **Robust Error Handling**: Graceful degradation
-- **Comprehensive Logging**: Full observability
+### Technical Excellence
+- **Modern Stack**: FastAPI + Streamlit + Google Gemini AI
+- **Robust Architecture**: Graceful error handling and comprehensive logging
+- **Scalable Design**: Easy to add new medical specialists
+- **Patient Safety**: Comprehensive disclaimers and emergency protocols
 
 ## 🛠️ Demo Preparation Checklist
 
